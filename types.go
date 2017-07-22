@@ -69,6 +69,15 @@ func uintToBytes(x uint64) []byte {
 	return C.GoBytes(unsafe.Pointer(&ul), C.int(unsafe.Sizeof(ul)))
 }
 
+func uintArrayToBytes(x []uint) []byte {
+	blen := len(x) * int(unsafe.Sizeof(uint64(0)))
+	b := make([]byte, blen)
+	for _, v := range x {
+		b = append(b, uintToBytes(uint64(v))...)
+	}
+	return b
+}
+
 // Error represents an PKCS#11 error.
 type Error uint
 
@@ -183,6 +192,8 @@ func NewAttribute(typ uint, x interface{}) *Attribute {
 		a.Value = uintToBytes(uint64(v))
 	case uint:
 		a.Value = uintToBytes(uint64(v))
+	case []uint:
+		a.Value = uintArrayToBytes([]uint(v))
 	case string:
 		a.Value = []byte(v)
 	case []byte:
