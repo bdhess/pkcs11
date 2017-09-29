@@ -78,6 +78,13 @@ func uintArrayToBytes(x []uint) []byte {
 	return b
 }
 
+func attributesToBytes(x []*Attribute) []byte {
+	arena, ptr, size := cAttributeList(x)
+	bytes := C.GoBytes(unsafe.Pointer(&ptr), C.int(size))
+	arena.Free()
+	return bytes
+}
+
 // Error represents an PKCS#11 error.
 type Error uint
 
@@ -194,6 +201,8 @@ func NewAttribute(typ uint, x interface{}) *Attribute {
 		a.Value = uintToBytes(uint64(v))
 	case []uint:
 		a.Value = uintArrayToBytes([]uint(v))
+	case []*Attribute:
+		a.Value = attributesToBytes([]*Attribute(v))
 	case string:
 		a.Value = []byte(v)
 	case []byte:
