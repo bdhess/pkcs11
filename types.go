@@ -252,19 +252,13 @@ func cDate(t time.Time) []byte {
 // Mechanism holds an mechanism type/value combination.
 type Mechanism struct {
 	Mechanism uint
-	Parameter []byte
+	Parameter interface{}
 }
 
 func NewMechanism(mech uint, x interface{}) *Mechanism {
 	m := new(Mechanism)
 	m.Mechanism = mech
-	if x == nil {
-		return m
-	}
-
-	// Add any parameters passed (For now presume always bytes were passed in, is there another case?)
-	m.Parameter = x.([]byte)
-
+	m.Parameter = x
 	return m
 }
 
@@ -276,12 +270,21 @@ func cMechanismList(m []*Mechanism) (arena, C.CK_MECHANISM_PTR, C.CK_ULONG) {
 	pm := make([]C.CK_MECHANISM, len(m))
 	for i := 0; i < len(m); i++ {
 		pm[i].mechanism = C.CK_MECHANISM_TYPE(m[i].Mechanism)
-		//skip parameter if length is 0 to prevent panic in arena.Allocate
-		if m[i].Parameter == nil || len(m[i].Parameter) == 0 {
+		param := m[i].Parameter
+		if param == nil {
 			continue
 		}
+		if nativeParam, ok := m[i].Parameter.(mechanismParam); ok {
+			pm[i].pParameter, pm[i].ulParameterLen = nativeParam.toNative(arena)
+		} else {
+			bytesParam := m[i].Parameter.([]byte)
+			//skip parameter if length is 0 to prevent panic in arena.Allocate
+			if len(bytesParam) == 0 {
+				continue
+			}
 
-		pm[i].pParameter, pm[i].ulParameterLen = arena.Allocate(m[i].Parameter)
+			pm[i].pParameter, pm[i].ulParameterLen = arena.Allocate(bytesParam)
+		}
 	}
 	return arena, C.CK_MECHANISM_PTR(&pm[0]), C.CK_ULONG(len(m))
 }
@@ -291,4 +294,27 @@ type MechanismInfo struct {
 	MinKeySize uint
 	MaxKeySize uint
 	Flags      uint
+}
+
+type mechanismParam interface {
+	toNative(arena) (C.CK_VOID_PTR, C.CK_ULONG)
+}
+
+// OaepParams provides wrapped access to CK_RSA_PKCS_OAEP_PARAMS
+type OaepParams struct {
+	HashAlgorithm          uint
+	MaskGenerationFunction uint
+	SourceType             uint
+	Source                 []byte
+}
+
+func (p *OaepParams) toNative(arena arena) (C.CK_VOID_PTR, C.CK_ULONG) {
+	var params *C.CK_RSA_PKCS_OAEP_PARAMS
+	params.hashAlg = C.CK_MECHANISM_TYPE(p.HashAlgorithm)
+	params.mgf = C.CK_RSA_PKCS_MGF_TYPE(p.MaskGenerationFunction)
+	params.source = C.CK_RSA_PKCS_OAEP_SOURCE_TYPE(p.SourceType)
+	if p.Source != nil {
+		params.pSourceData, params.ulSourceDataLen = arena.Allocate(p.Source)
+	}
+	return C.CK_VOID_PTR(params), C.CK_ULONG(unsafe.Sizeof(params))
 }

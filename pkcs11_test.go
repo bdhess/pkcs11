@@ -24,7 +24,7 @@ This test supports the following environment variables:
 */
 
 func setenv(t *testing.T) *Ctx {
-	lib := "/usr/lib/softhsm/libsofthsm.so"
+	lib := "/usr/local/lib/softhsm/libsofthsm2.so"
 	if x := os.Getenv("SOFTHSM_LIB"); x != "" {
 		lib = x
 	}
@@ -64,7 +64,7 @@ func getSession(p *Ctx, t *testing.T) SessionHandle {
 	if e != nil {
 		t.Fatalf("session %s\n", e)
 	}
-	if e := p.Login(session, CKU_USER, pin); e != nil {
+	if e := p.Login(session, CKU_USER, "123456"); e != nil {
 		t.Fatalf("user pin %s\n", e)
 	}
 	return session
@@ -114,7 +114,7 @@ func TestFindObject(t *testing.T) {
 	session := getSession(p, t)
 	defer finishSession(p, session)
 
-	tokenLabel:= "TestFindObject"
+	tokenLabel := "TestFindObject"
 
 	// There are 2 keys in the db with this tag
 	generateRSAKeyPair(t, p, session, tokenLabel, false)
@@ -212,7 +212,6 @@ func TestDigestUpdate(t *testing.T) {
 	}
 }
 
-
 /*
 Purpose: Generate RSA keypair with a given name and persistence.
 Inputs: test object
@@ -287,16 +286,58 @@ func TestSign(t *testing.T) {
 	}
 }
 
+func TestEncrypt(t *testing.T) {
+	p := setenv(t)
+	session := getSession(p, t)
+	defer finishSession(p, session)
+
+	tokenLabel := "TestEncrypt"
+	pbk, pvk := generateRSAKeyPair(t, p, session, tokenLabel, false)
+
+	oaepParams := &OaepParams{
+		HashAlgorithm:          CKM_SHA256,
+		MaskGenerationFunction: CKG_MGF1_SHA256,
+		SourceType:             0,
+		Source:                 nil}
+	mech := []*Mechanism{NewMechanism(CKM_RSA_PKCS_OAEP, oaepParams)}
+
+	data := "The quick brown fox jumps over the lazy dog"
+
+	e := p.EncryptInit(session, mech, pbk)
+	if e != nil {
+		t.Fatalf("failed to init encrypt: %s\n", e)
+	}
+
+	ciphertext, e := p.Encrypt(session, []byte(data))
+	if e != nil {
+		t.Fatalf("failed to encrypt: %s\n", e)
+	}
+
+	e = p.DecryptInit(session, mech, pvk)
+	if e != nil {
+		t.Fatalf("failed to init decrypt: %s\n", e)
+	}
+
+	plaintext, e := p.Decrypt(session, ciphertext)
+	if e != nil {
+		t.Fatalf("failed to decrypt: %s\n", e)
+	}
+
+	if data != string(plaintext) {
+		t.Fatalf("Expected '%v' does not match actual '%v'\n", data, plaintext)
+	}
+}
+
 /* destroyObject
-	Purpose: destroy and object from the HSM
-	Inputs: test handle
-		session handle
-		searchToken: String containing the token label to search for.
-		class: Key type (CKO_PRIVATE_KEY or CKO_PUBLIC_KEY) to remove.
-	Outputs: removes object from HSM
-	Returns: Fatal error on failure.
+Purpose: destroy and object from the HSM
+Inputs: test handle
+	session handle
+	searchToken: String containing the token label to search for.
+	class: Key type (CKO_PRIVATE_KEY or CKO_PUBLIC_KEY) to remove.
+Outputs: removes object from HSM
+Returns: Fatal error on failure.
 */
-func destroyObject(t *testing.T, p *Ctx, session SessionHandle, searchToken string, class uint) (err error){
+func destroyObject(t *testing.T, p *Ctx, session SessionHandle, searchToken string, class uint) (err error) {
 	template := []*Attribute{
 		NewAttribute(CKA_LABEL, searchToken),
 		NewAttribute(CKA_CLASS, class)}
@@ -389,4 +430,5 @@ func ExampleSign() {
 	fmt.Printf("It works!")
 	// Output: It works!
 }
+
 // Copyright 2013 Miek Gieben. All rights reserved.
