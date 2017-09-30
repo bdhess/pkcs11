@@ -70,10 +70,13 @@ func uintToBytes(x uint64) []byte {
 }
 
 func uintArrayToBytes(x []uint) []byte {
-	blen := len(x) * int(unsafe.Sizeof(uint64(0)))
-	b := make([]byte, blen)
-	for _, v := range x {
-		b = append(b, uintToBytes(uint64(v))...)
+	ulSize := int(unsafe.Sizeof(C.CK_ULONG(0)))
+	b := make([]byte, len(x)*ulSize)
+	for i := 0; i < len(x); i++ {
+		v := uintToBytes(uint64(x[i]))
+		for j := 0; j < ulSize; j++ {
+			b[(i*ulSize)+j] = v[j]
+		}
 	}
 	return b
 }
