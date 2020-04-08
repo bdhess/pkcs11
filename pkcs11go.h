@@ -12,7 +12,6 @@
 #define CK_DECLARE_FUNCTION_POINTER(returnType, name) returnType (* name)
 #define CK_CALLBACK_FUNCTION(returnType, name) returnType (* name)
 
-#include <unistd.h>
 #ifdef PACKED_STRUCTURES
 # pragma pack(push, 1)
 # include "pkcs11.h"
